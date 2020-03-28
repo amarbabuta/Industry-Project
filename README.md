@@ -1,2 +1,2 @@
-# Industry-Project
+# Admission timestamps
 Capstone Project
