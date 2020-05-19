@@ -1,0 +1,225 @@
+---
+title: "Project-Admission Timestamp"
+author: "Wanqi Geng"
+date: "15 May 2020"
+output: html_document
+---
+
+```{r, include=FALSE}
+# General set-up for the report:
+# Don't print out code
+# Save results so that code blocks aren't re-run unless code
+# changes (cache), _or_ a relevant earlier code block changed (autodep),
+# don't clutter R output with messages or warnings (message, warning)
+library(MASS)
+library(knitr)
+library(mapproj)
+library(np)
+library(ggplot2)
+library(gridExtra)
+library(broom)
+library(dplyr)
+opts_chunk$set(echo=FALSE,
+               cache=TRUE, autodep=TRUE,
+               message=FALSE, warning=FALSE)
+# Turn off meaningless clutter in summary() output
+options(show.signif.stars=FALSE)
+
+##https://www.kaggle.com/artgor/eda-and-models#Functions-used-in-this-kernel
+
+```
+
+# Data analysis
+
+
+## Introduction
+
+
+## Exploratory data analysis
+```{r, csv-read, include=FALSE}
+admission_workflow_data=read.csv("C:/Users/cyh_c/Desktop/gwq/PG_Apps_Workflow_v17.csv",na.strings = c(""))
+```
+
+```{r subset1 of dataset, include=FALSE}
+## will add RETURNING_DEFERRAL CURRENT_AVAIL_YEAR CURRENT_STUD_PERIOD ORGINAL_AVAIL_YEAR OGINAL_STUD_PERIOD
+subset1_data = subset(admission_workflow_data,select=c(CASE_ID,STU_CITIZEN_NM,STU_ABOR_TSI_NM,STU_BIRTH_CNTRY_NM,STU_CTZN_CNTRY_NM,SUBMISSION_METHOD,ENTRY_TYPE,ASSESSMENT_DECISION_NM,ASSESSMENT_OUTCOME_NM,LAST_COUNTRY_EDUCATION,PREFERENCE_NO,AVAIL_ORG_UNIT_NM,STUDY_MODE_CD,RETURNING_DEFERRAL,CURR_AVAIL_YR,CURR_STUDY_PERIOD,ORIG_AVAIL_YR,ORIG_STUDY_PERIOD,SPK_CAT_TYPE_CD,OFFER_RELEASED_FG,OFFER_OUTCOME_CD,OFFER_CONDITIONS))
+```
+
+###Variables table
+```{r discrete,echo=FALSE}
+disc_names = colnames(subset1_data)[c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22)]
+descriptions = c('The case ID (81265 levels)',
+                 'The visa status of students (6 levels)',
+                 'The Aboriginal and Torres Strait Islander status of students (6 levels)',
+                 'The country of birth of students (201 levels)',
+                 'The country of citizen of students (180 levels with missing values)',
+                 'The application submission methods of students (6 levels with missing values)',
+                 'The entry types of students(17 levels with missing values)',
+                 'The assessment decision (7 levels with missing values)',
+                 'The assessment outcome (7 levels with missing values)',
+                 'The last country of education of students (144 levels with missing values)',
+                 'The application perference number of students (7 levels)',
+                 'The name of organization units of students (15 levels with wrong values "Veterinary and (&) Agricultural Sciences")',
+                 'The study mode of students (5 levels: EXT=external, GOM=graduate online Melbourne, MI=mobility in, MO=mobility out, STD=standard)',
+                 'The status of returning deferral (Y = YES, N = NO)',
+                 'The available year after deferral(2019/2020)',
+                 'The available study period after deferral(Mid Year Intake/Start Year Intake)',
+                 'The available year when apply (6 levels 2016~2021)',
+                 'the available study period when apply (Mid Year Intake/Start Year Intake)',
+                 'The level of study of students (5 levels: CPG=?, DCW=doctor coursework, GC=graduate coursework, MCW=master coursework, PGD=phd)',
+                 'The status of offer released (N = NO, Y = YES with missing values)',
+                 'The outcome of offer released (5 leves with missing values $ACC = accepted, $DEC = declined, $DEF = deferred, $LAP = lapsed, $RES = resend',
+                 'The status of offfer conditions (N = NO, Y = YES with missing values)')
+
+table_disc = cbind(disc_names, descriptions)
+colnames(table_disc) = c('Variable Name','Description')
+kable(table_disc, digits=2, caption='Discrete Predictors')
+
+rm(descriptions, table_disc)
+
+```
+
+###fix wrong/duplicate/Missing Data
+
+```{r fix wrong values, include = FALSE}
+##change the "Veterinary & Agricultural Sciences" to "Veterinary and Agricultural Sciences"
+subset1_data$AVAIL_ORG_UNIT_NM=as.character(subset1_data$AVAIL_ORG_UNIT_NM)
+subset1_data$AVAIL_ORG_UNIT_NM[subset1_data$AVAIL_ORG_UNIT_NM == "Veterinary & Agricultural Sciences"]<- "Veterinary and Agricultural Sciences"
+subset1_data$AVAIL_ORG_UNIT_NM=as.factor(subset1_data$AVAIL_ORG_UNIT_NM)
+```
+
+```{r drop duplicate, include=FALSE}
+##81265
+subset1_unique_data=subset1_data[!duplicated(subset1_data),]
+```
+
+```{r replace na with Not entered,include=FALSE}
+subset1_unique_data[1:22]<-lapply(subset1_unique_data[1:22],as.character)
+subset1_unique_data[is.na(subset1_unique_data)] <-"Not entered"
+subset1_unique_data[1:22]<-lapply(subset1_unique_data[1:22],as.factor)
+```
+
+### Response variables
+
+```{r not-entered values-R1}
+#39002
+count(subset1_unique_data,OFFER_RELEASED_FG)
+```
+
+```{r not-entered values-R2}
+#39002
+##NA exsits 14018 not answer? maybe we can combine it with lapse109??
+count(subset1_unique_data,OFFER_OUTCOME_CD)
+```
+```{r not-entered values-R3}
+#14954
+##Pre-request OFFER_RELEASED_FG == "Y"
+count(subset1_unique_data,OFFER_CONDITIONS)
+
+```
+
+```{r values-R4}
+##Pre-request:OFFER_OUTCOME_CD: $DEF
+count(subset1_unique_data,RETURNING_DEFERRAL)
+
+```
+### Predict variables
+
+```{r not-entered values-P4}
+#4
+count(subset1_unique_data,STU_BIRTH_CNTRY_NM)
+```
+
+```{r not-entered values-P1,include=FALSE}
+#936
+count(subset1_unique_data,STU_CTZN_CNTRY_NM)
+```
+
+```{r not-entered values-P2,include=FALSE}
+#21
+count(subset1_unique_data,SUBMISSION_METHOD)
+```
+
+```{r not-entered values-P3,include=FALSE}
+#36614
+count(subset1_unique_data,ENTRY_TYPE)
+```
+
+```{r not-entered values-P4,include=FALSE}
+#6667
+count(subset1_unique_data,ASSESSMENT_DECISION_NM)
+```
+
+```{r not-entered values-P5,include=FALSE}
+#7335
+count(subset1_unique_data,ASSESSMENT_OUTCOME_NM)
+```
+
+```{r not-entered values-P6,include=FALSE}
+#17392
+count(subset1_unique_data,LAST_COUNTRY_EDUCATION)
+```
+
+```{r predict and fill missing values1,include=FALSE}
+subset1_unique_data$OFFER_RELEASED_FG=as.character(subset1_unique_data$OFFER_RELEASED_FG)
+##treat "Not entered"" as "N" ? ask william 
+subset1_unique_data$OFFER_RELEASED_FG <- ifelse(subset1_unique_data$OFFER_RELEASED_FG=="Not entered","N",subset1_unique_data$OFFER_RELEASED_FG)
+subset1_unique_data$OFFER_RELEASED_FG=as.factor(subset1_unique_data$OFFER_RELEASED_FG)
+```
+
+```{r predict and fill missing value 1-1, include=FALSE}
+##first check the visa status
+##fill "Austrlia" in cells if visa status is "Australian" 
+##fill "New Zealand" in cells if visa status is "New Zealander" 
+subset1_unique_data$STU_CTZN_CNTRY_NM=as.character(subset1_unique_data$STU_CTZN_CNTRY_NM)
+subset1_unique_data$STU_BIRTH_CNTRY_NM=as.character(subset1_unique_data$STU_BIRTH_CNTRY_NM)
+subset1_unique_data$STU_CTZN_CNTRY_NM[subset1_unique_data$STU_CITIZEN_NM == "Australian"]<- "Austrlia"
+subset1_unique_data$STU_CTZN_CNTRY_NM[subset1_unique_data$STU_CITIZEN_NM == "New Zealander"]<- "New Zealand"
+
+##second check country of birth
+##treat "Not entered" as values of their birth countries
+subset1_unique_data$STU_CTZN_CNTRY_NM <- ifelse(subset1_unique_data$STU_CTZN_CNTRY_NM=="Not entered",subset1_unique_data$STU_BIRTH_CNTRY_NM,subset1_unique_data$STU_CTZN_CNTRY_NM)
+
+subset1_unique_data$STU__CTZN_CNTRY_NM=as.factor(subset1_unique_data$STU_CTZN_CNTRY_NM)
+subset1_unique_data$STU_BIRTH_CNTRY_NM=as.factor(subset1_unique_data$STU_BIRTH_CNTRY_NM)
+
+#not entered remain 3
+```
+
+###Initial Summary Observations
+
+```{r PROP TABLE}
+##proportion 
+prop.table(table(subset1_unique_data$STU_CITIZEN_NM))
+prop.table(table(subset1_unique_data$STU_CITIZEN_NM,subset1_unique_data$OFFER_RELEASED_FG),1)
+
+prop.table(table(subset1_unique_data$STU_ABOR_TSI_NM)
+prop.table(table(subset1_unique_data$STU_ABOR_TSI_NM,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+
+We ran quick calculations to make basic observations about the dataset and found that:
+35.99% of students' visa status were Australian, and ....
+
+48.40% of students whose visa status were Australian didn't get offer, and 51.60% of students whose visa status were Australian get offer released.
+```{r plot1,fig.align='center', fig.width= 8, fig.height = 10,echo=FALSE}
+p1=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=STU_CITIZEN_NM),position="dodge")+ggtitle("Visa status vs. offer released")
+
+```
+
+
+
+```{r plot2}
+p2=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=STU_ABOR_TSI_NM),position="dodge")+ggtitle("STU_ABOR_TSI_NM vs. offer released")
+p2
+```
+
+```{r plot3}
+p3=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=SUBMISSION_METHOD),position="dodge")+ggtitle("SUBMISSION METHOD vs. offer released")
+p3
+```
+
+
+
+
+
+
