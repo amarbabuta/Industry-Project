@@ -1,0 +1,208 @@
+---
+title: "Project-Admission Timestamp--OFFER RELEASED"
+author: "Wanqi Geng"
+date: "25 May 2020 "
+output: html_document
+---
+
+```{r, include=FALSE}
+# General set-up for the report:
+# Don't print out code
+# Save results so that code blocks aren't re-run unless code
+# changes (cache), _or_ a relevant earlier code block changed (autodep),
+# don't clutter R output with messages or warnings (message, warning)
+library(MASS)  
+library(knitr)
+library(mapproj)
+library(np)
+library(ggplot2)
+library(gridExtra)
+library(broom)
+library(dplyr)
+opts_chunk$set(echo=FALSE,
+               cache=TRUE, autodep=TRUE,
+               message=FALSE, warning=FALSE)
+# Turn off meaningless clutter in summary() output
+options(show.signif.stars=FALSE)
+
+```
+
+# Data analysis
+
+
+## Introduction
+
+
+## Exploratory data analysis
+```{r, csv-read, include=FALSE}
+admission_workflow_data=read.csv("C:/Users/cyh_c/Desktop/gwq/PG_Apps_Workflow_v17.csv",na.strings = c(""))
+```
+
+```{r subset1 of dataset, include=FALSE}
+subset1_data = subset(admission_workflow_data,select=c(CASE_ID,STU_CITIZEN_NM,STU_ABOR_TSI_NM,SUBMISSION_METHOD,ENTRY_TYPE,LAST_COUNTRY_EDUCATION,PREFERENCE_NO,AVAIL_ORG_UNIT_NM,STUDY_MODE_CD,ORIG_AVAIL_YR,ORIG_STUDY_PERIOD,SPK_CAT_TYPE_CD,OFFER_RELEASED_FG))
+```
+
+###Variables table
+```{r discrete,echo=FALSE}
+disc_names = colnames(subset1_data)[c(1,2,3,4,5,6,7,8,9,10,11,12,13)]
+descriptions = c('The case ID (81265 levels)',
+                 'The visa status of students (6 levels)',
+                 'The Aboriginal and Torres Strait Islander status of students (6 levels)',
+                 'The application submission methods of students (6 levels with missing values)',
+                 'The entry types of students(17 levels with missing values)',
+                 'The last country of education of students (144 levels with missing values)',
+                 'The application perference number of students (7 levels)',
+                 'The name of organization units of students (15 levels with wrong values "Veterinary and (&) Agricultural Sciences")',
+                 'The study mode of students (5 levels: EXT=external, GOM=graduate online Melbourne, MI=mobility in, MO=mobility out, STD=standard)',
+                 #'The status of returning deferral (Y = YES, N = NO)',
+                 'The available year when apply (6 levels 2016~2021)',
+                 'the available study period when apply (Mid Year Intake/Start Year Intake)',
+                 'The level of study of students (5 levels: CPG=?, DCW=doctor coursework, GC=graduate coursework, MCW=master coursework, PGD=phd)',
+                 'The status of offer released (N = NO, Y = YES with missing values)'
+                 #'The outcome of offer released (5 leves with missing values $ACC = accepted, $DEC = declined, $DEF = deferred, $LAP = lapsed, $RES = resend',
+                 #'The status of offfer conditions (N = NO, Y = YES with missing values)'
+                 )
+
+table_disc = cbind(disc_names, descriptions)
+colnames(table_disc) = c('Variable Name','Description')
+kable(table_disc, digits=2, caption='Discrete Predictors')
+
+rm(descriptions, table_disc)
+
+```
+
+###fix wrong/duplicate/Missing Data
+
+```{r fix wrong values, include = FALSE}
+##change the "Veterinary & Agricultural Sciences" to "Veterinary and Agricultural Sciences"
+subset1_data$AVAIL_ORG_UNIT_NM=as.character(subset1_data$AVAIL_ORG_UNIT_NM)
+subset1_data$AVAIL_ORG_UNIT_NM[subset1_data$AVAIL_ORG_UNIT_NM == "Veterinary & Agricultural Sciences"]<- "Veterinary and Agricultural Sciences"
+subset1_data$AVAIL_ORG_UNIT_NM=as.factor(subset1_data$AVAIL_ORG_UNIT_NM)
+```
+
+```{r drop duplicate, include=FALSE}
+##81265
+subset1_unique_data=subset1_data[!duplicated(subset1_data),]
+```
+
+```{r replace na with Not entered,include=FALSE}
+subset1_unique_data[1:13]<-lapply(subset1_unique_data[1:13],as.character)
+subset1_unique_data[is.na(subset1_unique_data)] <-"Not entered"
+subset1_unique_data[1:13]<-lapply(subset1_unique_data[1:13],as.factor)
+```
+
+### Response variables:OFFER_RELEASED_FG
+
+```{r not-entered values-R1, include=FALSE}
+#39002
+count(subset1_unique_data,OFFER_RELEASED_FG)
+```
+
+
+
+
+
+```{r predict and fill missing valuesR1,include=FALSE}
+subset1_unique_data$OFFER_RELEASED_FG=as.character(subset1_unique_data$OFFER_RELEASED_FG)
+##treat "Not entered"" as "N"
+subset1_unique_data$OFFER_RELEASED_FG <- ifelse(subset1_unique_data$OFFER_RELEASED_FG=="Not entered","N",subset1_unique_data$OFFER_RELEASED_FG)
+subset1_unique_data$OFFER_RELEASED_FG=as.factor(subset1_unique_data$OFFER_RELEASED_FG)
+```
+
+
+
+###Initial Summary Observations
+
+```{r PROP TABLE 1, echo = FALSE}
+##proportion 
+prop.table(table(subset1_unique_data$STU_CITIZEN_NM))
+prop.table(table(subset1_unique_data$STU_CITIZEN_NM,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+We ran quick calculations to make basic observations about the dataset and found that:
+* 36.0% of students' visa status were Australian; 
+*1.0% of students' visa status were New Zealander; 
+* 0.8% students' visa status were Overseas Student Residing Overseas; 
+* 0.2% of students' visa status were Permanent Humanitarian Visa; 
+* 4.0% of students' visa status were Permanent Resident (excl Humanitarian); 
+* 58% of students' visa status were Temporary Entry Permit
+
+* For students whose visa status were Australian,48.4% of them didn't get offer, and 51.6% of them get offer released.
+* For students whose visa status were New Zealander, 46.1% of them didn't get offer, and 53.9% of them get offer released.
+* For students whose visa status were Overseas Student Residing Overseas, 57.2% of them didn't get offer, and 42.8% of them get offer released.
+* For students whose visa status were Permanent Humanitarian Visa, 71.6% of them didn't get offer, and 28.4% of them get offer released.
+* For students whose visa status were Permanent Resident (excl Humanitarian),50.6% of them didn't get offer, and 49.4% of them get offer released.
+* For students whose visa status were Temporary Entry Permit, 48.1% of them didn't get offer, and 51.9% of them get offer released.
+```{r PROP TABLE 2, echo = FALSE}
+prop.table(table(subset1_unique_data$STU_ABOR_TSI_NM))
+prop.table(table(subset1_unique_data$STU_ABOR_TSI_NM,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 3, echo = FALSE}
+prop.table(table(subset1_unique_data$SUBMISSION_METHOD))
+prop.table(table(subset1_unique_data$SUBMISSION_METHOD,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 4, echo = FALSE}
+prop.table(table(subset1_unique_data$ENTRY_TYPE))
+prop.table(table(subset1_unique_data$ENTRY_TYPE,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+
+
+```{r PROP TABLE 5, echo = FALSE}
+prop.table(table(subset1_unique_data$LAST_COUNTRY_EDUCATION))
+prop.table(table(subset1_unique_data$LAST_COUNTRY_EDUCATION,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 6, echo = FALSE}
+prop.table(table(subset1_unique_data$PREFERENCE_NO))
+prop.table(table(subset1_unique_data$PREFERENCE_NO,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 7, echo = FALSE}
+prop.table(table(subset1_unique_data$STUDY_MODE_CD))
+prop.table(table(subset1_unique_data$AVAIL_ORG_UNIT_NM,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 8, echo = FALSE}
+prop.table(table(subset1_unique_data$ORIG_AVAIL_YR))
+prop.table(table(subset1_unique_data$ORIG_AVAIL_YR,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 9, echo = FALSE}
+prop.table(table(subset1_unique_data$ORIG_STUDY_PERIOD))
+prop.table(table(subset1_unique_data$ORIG_STUDY_PERIOD,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 10, echo = FALSE}
+prop.table(table(subset1_unique_data$SPK_CAT_TYPE_CD))
+prop.table(table(subset1_unique_data$SPK_CAT_TYPE_CD,subset1_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r plot1,2,3,4,fig.align='center', fig.width= 16, fig.height = 12,echo=FALSE}
+p1=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=STU_CITIZEN_NM),position="dodge")+ggtitle("visa status vs. offer released")
+p2=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=STU_ABOR_TSI_NM),position="dodge")+ggtitle("aboriginal and torres strait islander status vs. offer released")
+p3=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=SUBMISSION_METHOD),position="dodge")+ggtitle("submission method vs. offer released")
+p4=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=ENTRY_TYPE),position="dodge")+ggtitle("entry type vs. offer released")
+grid.arrange(p1,p2,p3,p4,ncol=2)
+```
+
+```{r plot5,fig.align='center', fig.width= 24, fig.height = 6,echo=FALSE}
+p5=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=LAST_COUNTRY_EDUCATION),position="dodge")+ggtitle("last country of education vs. offer released")
+p5
+```
+
+```{r plot6,7,8,9,10,fig.align='center', fig.width= 16, fig.height = 20,echo=FALSE}
+p6=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=PREFERENCE_NO),position="dodge")+ggtitle("Prefernece number vs. offer released")
+p7=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=STUDY_MODE_CD),position="dodge")+ggtitle("Study mode vs. offer released")
+p8=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=ORIG_AVAIL_YR),position="dodge")+ggtitle("Original available year vs. offer released")
+p9=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=ORIG_STUDY_PERIOD),position="dodge")+ggtitle("Original available period vs. offer released")
+p10=ggplot(data=subset1_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=SPK_CAT_TYPE_CD),position="dodge")+ggtitle("level of study vs. offer released")
+grid.arrange(p6,p7,p8,p9,p10,ncol=2)
+```
+
+
+
+
+
+
+
