@@ -1,0 +1,159 @@
+---
+title: "Project-Admission Timestamp--OFFER OUTCOME"
+author: "Wanqi Geng"
+date: "25 May 2020 "
+output: html_document
+---
+
+```{r, include=FALSE}
+# General set-up for the report:
+# Don't print out code
+# Save results so that code blocks aren't re-run unless code
+# changes (cache), _or_ a relevant earlier code block changed (autodep),
+# don't clutter R output with messages or warnings (message, warning)
+library(MASS)  
+library(knitr)
+library(mapproj)
+library(np)
+library(ggplot2)
+library(gridExtra)
+library(broom)
+library(dplyr)
+opts_chunk$set(echo=FALSE,
+               cache=TRUE, autodep=TRUE,
+               message=FALSE, warning=FALSE)
+# Turn off meaningless clutter in summary() output
+options(show.signif.stars=FALSE)
+```
+
+```{r, csv-read, include=FALSE}
+admission_workflow_data=read.csv("C:/Users/cyh_c/Desktop/gwq/PG_Apps_Workflow_v17.csv",na.strings = c(""))
+```
+
+```{r subset2 of dataset, include=FALSE}
+subset2_data = subset(admission_workflow_data,select=c(CASE_ID,STU_CITIZEN_NM,STU_ABOR_TSI_NM,SUBMISSION_METHOD,ENTRY_TYPE,LAST_COUNTRY_EDUCATION,PREFERENCE_NO,AVAIL_ORG_UNIT_NM,STUDY_MODE_CD,ORIG_AVAIL_YR,ORIG_STUDY_PERIOD,SPK_CAT_TYPE_CD,OFFER_RELEASED_FG,OFFER_OUTCOME_CD))
+```
+
+
+```{r fix wrong values, include = FALSE}
+##change the "Veterinary & Agricultural Sciences" to "Veterinary and Agricultural Sciences"
+subset2_data$AVAIL_ORG_UNIT_NM=as.character(subset2_data$AVAIL_ORG_UNIT_NM)
+subset2_data$AVAIL_ORG_UNIT_NM[subset2_data$AVAIL_ORG_UNIT_NM == "Veterinary & Agricultural Sciences"]<- "Veterinary and Agricultural Sciences"
+subset2_data$AVAIL_ORG_UNIT_NM=as.factor(subset2_data$AVAIL_ORG_UNIT_NM)
+```
+
+```{r drop duplicate, include=FALSE}
+##81265
+subset2_unique_data=subset2_data[!duplicated(subset2_data),]
+```
+
+```{r replace na with Not entered,include=FALSE}
+subset2_unique_data[1:14]<-lapply(subset2_unique_data[1:14],as.character)
+subset2_unique_data[is.na(subset2_unique_data)] <-"Not entered"
+subset2_unique_data[1:14]<-lapply(subset2_unique_data[1:14],as.factor)
+```
+
+### Response variables:OFFER_OUTCOME_NM
+
+```{r predict and fill missing valuesR1,include=FALSE}
+subset2_unique_data$OFFER_RELEASED_FG=as.character(subset2_unique_data$OFFER_RELEASED_FG)
+##treat "Not entered"" as "N"
+subset2_unique_data$OFFER_RELEASED_FG <- ifelse(subset2_unique_data$OFFER_RELEASED_FG=="Not entered","N",subset2_unique_data$OFFER_RELEASED_FG)
+subset2_unique_data$OFFER_RELEASED_FG=as.factor(subset2_unique_data$OFFER_RELEASED_FG)
+```
+
+```{r drop OFFER_RELEASED_FG == "N", include = FALSE}
+subset2_unique_data <- subset2_unique_data[!(subset2_unique_data$OFFER_RELEASED_FG == "N"),]
+```
+
+```{r values-R2, include=FALSE}
+#39002
+##Pre-request OFFER_RELEASED_FG == "Y"
+##NA exsits 13826 not answer? maybe we can combine it with lapse109??
+count(subset2_unique_data,OFFER_OUTCOME_CD)
+```
+
+```{r predict and fill missing valuesR2,include=FALSE}
+subset2_unique_data$OFFER_OUTCOME_CD=as.character(subset2_unique_data$OFFER_OUTCOME_CD)
+##treat "NA"as "$LAP" 
+subset2_unique_data$OFFER_OUTCOME_CD <- ifelse(subset2_unique_data$OFFER_OUTCOME_CD=="NA","$LAP",subset2_unique_data$OFFER_OUTCOME_CD)
+subset2_unique_data$OFFER_OUTCOME_CD=as.factor(subset2_unique_data$OFFER_OUTCOME_CD)
+```
+
+###Initial Summary Observations
+
+```{r PROP TABLE 1, echo = FALSE}
+##proportion 
+prop.table(table(subset2_unique_data$STU_CITIZEN_NM))
+prop.table(table(subset2_unique_data$STU_CITIZEN_NM,subset2_unique_data$OFFER_OUTCOME_CD),1)
+```
+
+```{r PROP TABLE 2, echo = FALSE}
+prop.table(table(subset2_unique_data$STU_ABOR_TSI_NM))
+prop.table(table(subset2_unique_data$STU_ABOR_TSI_NM,subset2_unique_data$OFFER_OUTCOME_CD),1)
+```
+
+```{r PROP TABLE 3, echo = FALSE}
+prop.table(table(subset2_unique_data$SUBMISSION_METHOD))
+prop.table(table(subset2_unique_data$SUBMISSION_METHOD,subset2_unique_data$OFFER_OUTCOME_CD),1)
+```
+
+```{r PROP TABLE 4, echo = FALSE}
+prop.table(table(subset2_unique_data$ENTRY_TYPE))
+prop.table(table(subset2_unique_data$ENTRY_TYPE,subset2_unique_data$OFFER_OUTCOME_CD),1)
+```
+
+
+```{r PROP TABLE 5, echo = FALSE}
+prop.table(table(subset2_unique_data$LAST_COUNTRY_EDUCATION))
+prop.table(table(subset2_unique_data$LAST_COUNTRY_EDUCATION,subset2_unique_data$OFFER_OUTCOME_CD),1)
+```
+
+```{r PROP TABLE 6, echo = FALSE}
+prop.table(table(subset2_unique_data$PREFERENCE_NO))
+prop.table(table(subset2_unique_data$PREFERENCE_NO,subset2_unique_data$OFFER_OUTCOME_CD),1)
+```
+
+```{r PROP TABLE 7, echo = FALSE}
+prop.table(table(subset2_unique_data$STUDY_MODE_CD))
+prop.table(table(subset2_unique_data$AVAIL_ORG_UNIT_NM,subset2_unique_data$OFFER_OUTCOME_CD),1)
+```
+
+```{r PROP TABLE 8, echo = FALSE}
+prop.table(table(subset2_unique_data$ORIG_AVAIL_YR))
+prop.table(table(subset2_unique_data$ORIG_AVAIL_YR,subset2_unique_data$OFFER_OUTCOME_CD),1)
+```
+
+```{r PROP TABLE 9, echo = FALSE}
+prop.table(table(subset2_unique_data$ORIG_STUDY_PERIOD))
+prop.table(table(subset2_unique_data$ORIG_STUDY_PERIOD,subset2_unique_data$OFFER_OUTCOME_CD),1)
+```
+
+```{r PROP TABLE 10, echo = FALSE}
+prop.table(table(subset2_unique_data$SPK_CAT_TYPE_CD))
+prop.table(table(subset2_unique_data$SPK_CAT_TYPE_CD,subset2_unique_data$OFFER_OUTCOME_CD),1)
+```
+
+```{r plot1,2,3,4,fig.align='center', fig.width= 20, fig.height = 16,echo=FALSE}
+p1=ggplot(data=subset2_unique_data, aes(OFFER_OUTCOME_CD,..count..))+geom_bar(aes(fill=STU_CITIZEN_NM),position="dodge")+ggtitle("visa status vs. offer outcome")
+p2=ggplot(data=subset2_unique_data, aes(OFFER_OUTCOME_CD,..count..))+geom_bar(aes(fill=STU_ABOR_TSI_NM),position="dodge")+ggtitle("aboriginal and torres strait islander status vs. offer outcome")
+p3=ggplot(data=subset2_unique_data, aes(OFFER_OUTCOME_CD,..count..))+geom_bar(aes(fill=SUBMISSION_METHOD),position="dodge")+ggtitle("submission method vs. offer outcome")
+p4=ggplot(data=subset2_unique_data, aes(OFFER_OUTCOME_CD,..count..))+geom_bar(aes(fill=ENTRY_TYPE),position="dodge")+ggtitle("entry type vs. offer outcome")
+grid.arrange(p1,p2,p3,p4,ncol=2)
+```
+
+```{r plot5,fig.align='center', fig.width= 24, fig.height = 10,echo=FALSE}
+p5=ggplot(data=subset2_unique_data, aes(OFFER_OUTCOME_CD,..count..))+geom_bar(aes(fill=LAST_COUNTRY_EDUCATION),position="dodge")+ggtitle("last country of education vs. offer outcome")
+p5
+```
+
+```{r plot6,7,8,9,10,fig.align='center', fig.width= 16, fig.height = 20,echo=FALSE}
+p6=ggplot(data=subset2_unique_data, aes(OFFER_OUTCOME_CD,..count..))+geom_bar(aes(fill=PREFERENCE_NO),position="dodge")+ggtitle("Prefernece number vs. offer outcome")
+p7=ggplot(data=subset2_unique_data, aes(OFFER_OUTCOME_CD,..count..))+geom_bar(aes(fill=STUDY_MODE_CD),position="dodge")+ggtitle("Study mode vs. offer outcome")
+p8=ggplot(data=subset2_unique_data, aes(OFFER_OUTCOME_CD,..count..))+geom_bar(aes(fill=ORIG_AVAIL_YR),position="dodge")+ggtitle("Original available year vs. offer outcome")
+p9=ggplot(data=subset2_unique_data, aes(OFFER_OUTCOME_CD,..count..))+geom_bar(aes(fill=ORIG_STUDY_PERIOD),position="dodge")+ggtitle("Original available period vs. offer outcome")
+p10=ggplot(data=subset2_unique_data, aes(OFFER_OUTCOME_CD,..count..))+geom_bar(aes(fill=SPK_CAT_TYPE_CD),position="dodge")+ggtitle("level of study vs. offer outcome")
+grid.arrange(p6,p7,p8,p9,p10,ncol=2)
+```
+
+
