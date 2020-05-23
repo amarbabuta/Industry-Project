@@ -1,0 +1,291 @@
+---
+title: "Project-Admission Timestamp--OFFER RELEASED"
+author: "Wanqi Geng"
+date: "25 May 2020 "
+output: html_document
+---
+
+```{r, include=FALSE}
+# General set-up for the report:
+# Don't print out code
+# Save results so that code blocks aren't re-run unless code
+# changes (cache), _or_ a relevant earlier code block changed (autodep),
+# don't clutter R output with messages or warnings (message, warning)
+library(MASS)  
+library(knitr)
+library(mapproj)
+library(np)
+library(ggplot2)
+library(gridExtra)
+library(broom)
+library(dplyr)
+opts_chunk$set(echo=FALSE,
+               cache=TRUE, autodep=TRUE,
+               message=FALSE, warning=FALSE)
+# Turn off meaningless clutter in summary() output
+options(show.signif.stars=FALSE)
+
+```
+
+# Data analysis
+
+
+## Introduction
+
+
+## Exploratory Data Analysis
+
+Our orginal data contain 1048576 rows, and 56 columns. Each rows includes an application status of the applicant, time stamp of the application status,and characters of the applicant, such as visa status, entry type and last country of education, etc. There are more than one row for each applicant in the data because each applicant have more than one application status in general. So there are 1048576 rows even if only 81265 applicants were recorded in the data.
+
+```{r, csv-read, include=FALSE}
+admission_workflow_data=read.csv("C:/Users/cyh_c/Desktop/gwq/PG_Apps_Workflow_v17.csv",na.strings = c(""))
+```
+
+In order to find how does applicants' characters influence the status of offer releasing and the status of offer outcome. We only select the columns which are relevant, The variables are summarized in the tables below:
+
+```{r subset of dataset, include=FALSE}
+subset_data = subset(admission_workflow_data,select=c(CASE_ID,STU_CITIZEN_NM,STU_ABOR_TSI_NM,SUBMISSION_METHOD,ENTRY_TYPE,ASSESSMENT_DECISION_NM,ASSESSMENT_OUTCOME_NM,LAST_COUNTRY_EDUCATION,PREFERENCE_NO,AVAIL_ORG_UNIT_NM,STUDY_MODE_CD,RETURNING_DEFERRAL,CURR_AVAIL_YR,CURR_STUDY_PERIOD,ORIG_AVAIL_YR,ORIG_STUDY_PERIOD,SPK_CAT_TYPE_CD,OFFER_RELEASED_FG,OFFER_OUTCOME_CD,OFFER_CONDITIONS))
+```
+
+```{r discrete,echo=FALSE}
+disc_names = colnames(subset_data)[c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20)]
+descriptions = c('The case ID (81265 levels)',
+                 'The visa status of students (6 levels)',
+                 'The Aboriginal and Torres Strait Islander status of students (6 levels)',
+                 'The application submission methods of students (6 levels with missing values)',
+                 'The entry types of students(17 levels with missing values)',
+                 'The assessment decision',
+                 'The assessment outcome',
+                 'The last country of education of students (144 levels with missing values)',
+                 'The application perference number of students (7 levels)',
+                 'The name of organization units of students (15 levels with wrong values "Veterinary and (&) Agricultural Sciences")',
+                 'The study mode of students (5 levels: EXT=external, GOM=graduate online Melbourne, MI=mobility in, MO=mobility out, STD=standard)',
+                 'The status of returning deferral (Y = YES, N = NO)',
+                 'The available year after defer',
+                 'The available study period after defer',
+                 'The available year when apply (6 levels 2016~2021)',
+                 'the available study period when apply (Mid Year Intake/Start Year Intake)',
+                 'The level of study of students (5 levels: CPG=?, DCW=doctor coursework, GC=graduate coursework, MCW=master coursework, PGD=phd)',
+                 'The status of offer released (N = NO, Y = YES with missing values)',
+                 'The outcome of offer released (5 leves with missing values $ACC = accepted, $DEC = declined, $DEF = deferred, $LAP = lapsed, $RES = resend',
+                 'The status of offfer conditions (N = NO, Y = YES with missing values)'
+                 )
+
+table_disc = cbind(disc_names, descriptions)
+colnames(table_disc) = c('Variable Name','Description')
+kable(table_disc, digits=2)
+
+rm(descriptions, table_disc)
+
+```
+
+###Wrong Data
+
+In *`AVAIL_ORG_UNIT_NM`*, there are 16 levels which represnts 16 organization units of university which are avaible to apply for students. However, we found there are "Veterinary & Agricultural Sciences" and "Veterinary and Agricultural Sciences" exsits, these two levels should repsent one organization units, so we change the "Veterinary & Agricultural Sciences" to "Veterinary and Agricultural Sciences", and there are 15 levels now.
+
+```{r fix wrong values, include = FALSE}
+##change the "Veterinary & Agricultural Sciences" to "Veterinary and Agricultural Sciences"
+subset_data$AVAIL_ORG_UNIT_NM=as.character(subset_data$AVAIL_ORG_UNIT_NM)
+subset_data$AVAIL_ORG_UNIT_NM[subset_data$AVAIL_ORG_UNIT_NM == "Veterinary & Agricultural Sciences"]<- "Veterinary and Agricultural Sciences"
+subset_data$AVAIL_ORG_UNIT_NM=as.factor(subset_data$AVAIL_ORG_UNIT_NM)
+```
+
+###Duplicate Data
+We only selected columns which are related to applicants' characters into the subset. So there are duplicate rows for same application ID in the subset. There are 81265 rows left after we removed the duplicate. Now, different rows represented differnet applicants who applied Unimelb.
+
+```{r drop duplicate, include=FALSE}
+##81265
+subset_unique_data=subset_data[!duplicated(subset_data),]
+```
+
+###Missing Data and Outliers
+There are lots of missing values in different varaibles, and we fill it with "Not entered" since there are "not entered" value in the data which is same as missing value. 
+
+```{r replace na with Not entered,include=FALSE}
+subset_unique_data[1:20]<-lapply(subset_unique_data[1:20],as.character)
+subset_unique_data[is.na(subset_unique_data)] <-"Not entered"
+subset_unique_data[1:20]<-lapply(subset_unique_data[1:20],as.factor)
+```
+
+The usual order of events is an application is submitted, it goes for assessment, gets an ASSESSMENT_DECISION_NM, then gets an ASSESSMENT_OUTCOME_NM, then the offer is/is not released (OFFER_RELEASED_FG), then gets OFFER_OUTCOME_CD.
+
+The below table shows the frequency of each level in *`ASSESSMENT_DECIOSN_NM`*, there are 6667 "Not entered".
+```{r check level frequnecy of ASSESSMENT_DECISION_NM, echo=FALSE }
+kable(count(subset_unique_data,ASSESSMENT_DECISION_NM))
+```
+
+The below table shows the frequency of each level in *`ASSESSMENT_OUTCOME_NM`*, there are 7335 "Not entered".
+```{r check level frequnecy of ASSESSMENT_OUTCOME_NM, echo=FALSE }
+kable(count(subset_unique_data,ASSESSMENT_OUTCOME_NM))
+```
+
+Applications where *`ASSESSMENT_DECISION_NM`* and *`ASSESSMENT_OUTCOME_NM`* are missing are applications that haven’t got to the assessment stage. We treat these applications as outliers, and remove them.
+
+```{r remove outlier 1, include = FALSE}
+#6667
+subset_unique_data<-subset_unique_data[!(subset_unique_data$ASSESSMENT_DECISION_NM=="Not entered"&subset_unique_data$ASSESSMENT_OUTCOME_NM=="Not entered"),]
+```
+
+The below table shows the frequency of each level in *`OFFER_RELEASED_FG`*, there are 32335 "Not entered" which we will treat as "N".
+```{r frequency table of offer releasing, echo=FALSE}
+#32335
+kable(count(subset_unique_data,OFFER_RELEASED_FG))
+```
+
+```{r change not entered values 1,include=FALSE}
+subset_unique_data$OFFER_RELEASED_FG=as.character(subset_unique_data$OFFER_RELEASED_FG)
+##treat "Not entered"" as "N"
+subset_unique_data$OFFER_RELEASED_FG <- ifelse(subset_unique_data$OFFER_RELEASED_FG=="Not entered","N",subset_unique_data$OFFER_RELEASED_FG)
+subset_unique_data$OFFER_RELEASED_FG=as.factor(subset_unique_data$OFFER_RELEASED_FG)
+```
+
+The below table shows the frequency of each level in *`OFFER_OUTCOME_CD`*, there are 32335 "Not entered" which we will treat as "NA".
+```{r frequency table of offer outcome, echo=FALSE}
+#32335
+kable(count(subset_unique_data,OFFER_OUTCOME_CD))
+```
+
+```{r change not entered values 2,include=FALSE}
+subset_unique_data$OFFER_OUTCOME_CD=as.character(subset_unique_data$OFFER_OUTCOME_CD)
+##treat "Not entered"" as "NA"
+subset_unique_data$OFFER_OUTCOME_CD <- ifelse(subset_unique_data$OFFER_OUTCOME_CD=="Not entered","NA",subset_unique_data$OFFER_OUTCOME_CD)
+subset_unique_data$OFFER_OUTCOME_CD=as.factor(subset_unique_data$OFFER_OUTCOME_CD)
+```
+
+We first check the propotion of *`ASSESSMENT_OUTCOME_NM`* in different levels of *`ASSESSMENT_DECISION_NM`*.
+
+```{r proption table A_D_N VS A_O_N, echo=FALSE}
+kable(prop.table(table(subset_unique_data$ASSESSMENT_DECISION_NM,subset_unique_data$ASSESSMENT_OUTCOME_NM),1),digits = 6)
+```
+
+Then we check the propotion of *`OFFER_RELEASED_FG`*  in different levels of *`ASSESSMENT_OUTCOME_NM`*.
+
+*For "alternative offer" outcome, 1.6% didn't get offer and 98.4% get offer.
+*For "do not use" outcome, 86.4% didn't get offer and 13.6% get offer.
+*For "higher preference successful" outcome, 99.9843% didn't get offer and 0.0157% get offer.
+*For "ineligible/withdrawn" outcome, 100% didn't get offer.
+*For "no outcome set" outcome, 99.8429% didn't get offer and 0.1571% get offer.
+*For "not entered", 100% didn't get offer.
+*For "not successful" outcome, 99.9797% didn't get offer and 0.0203% get offer.
+*For "successful" outcome, 0.4351% didn't get offer and 99.5649% get offer.
+
+We treat applicants who get "alternative offer" but didn't get offer, pplicants who get "do not use" but get offer, applicants who get"higher preference successful" but get offer, pplicants who get "no outcome set" but get offer, applicants who get "not successful" but get offer and pplicants who get"successful" but didn't get offer as outliers, we remove these outliers and now we have 74398 applicants left.
+```{r proption table A_O_N VS O_R_F, echo=FALSE}
+kable(prop.table(table(subset_unique_data$ASSESSMENT_OUTCOME_NM,subset_unique_data$OFFER_RELEASED_FG),1),digits = 6)
+```
+
+
+```{r remove outlier 2, include = FALSE}
+#8
+subset_unique_data <- subset_unique_data[!(subset_unique_data$ASSESSMENT_OUTCOME_NM=="Alternative Offer"&subset_unique_data$OFFER_RELEASED_FG=="N"),]
+#3
+subset_unique_data <- subset_unique_data[!(subset_unique_data$ASSESSMENT_OUTCOME_NM=="DO NOT USE"&subset_unique_data$OFFER_RELEASED_FG=="Y"),]
+#1
+subset_unique_data <- subset_unique_data[!(subset_unique_data$ASSESSMENT_OUTCOME_NM=="Higher Preference Successful"&subset_unique_data$OFFER_RELEASED_FG=="Y"),]
+#3
+subset_unique_data <- subset_unique_data[!(subset_unique_data$ASSESSMENT_OUTCOME_NM=="No Outcome Set"&subset_unique_data$OFFER_RELEASED_FG=="Y"),]
+#4
+subset_unique_data <- subset_unique_data[!(subset_unique_data$ASSESSMENT_OUTCOME_NM=="Not Successful"&subset_unique_data$OFFER_RELEASED_FG=="Y"),]
+#181
+subset_unique_data <- subset_unique_data[!(subset_unique_data$ASSESSMENT_OUTCOME_NM=="Successful"&subset_unique_data$OFFER_RELEASED_FG=="N"),]
+
+```
+
+###Initial Summary Observations
+
+```{r PROP TABLE 1, echo = FALSE}
+##proportion 
+prop.table(table(subset_unique_data$STU_CITIZEN_NM))
+prop.table(table(subset_unique_data$STU_CITIZEN_NM,subset_unique_data$OFFER_RELEASED_FG),1)
+```
+We ran quick calculations to make basic observations about the dataset and found that:
+
+* 36.0% of students' visa status were Australian; 
+*1.0% of students' visa status were New Zealander; 
+* 0.8% students' visa status were Overseas Student Residing Overseas; 
+* 0.2% of students' visa status were Permanent Humanitarian Visa; 
+* 4.0% of students' visa status were Permanent Resident (excl Humanitarian); 
+* 58% of students' visa status were Temporary Entry Permit
+
+* For students whose visa status were Australian,44.3% of them didn't get offer, and 55.7% of them get offer released.
+* For students whose visa status were New Zealander, 43.0% of them didn't get offer, and 57.0% of them get offer released.
+* For students whose visa status were Overseas Student Residing Overseas, 52.8% of them didn't get offer, and 47.2% of them get offer released.
+* For students whose visa status were Permanent Humanitarian Visa, 64.6% of them didn't get offer, and 35.4% of them get offer released.
+* For students whose visa status were Permanent Resident (excl Humanitarian),45.3% of them didn't get offer, and 54.7% of them get offer released.
+* For students whose visa status were Temporary Entry Permit, 43.0% of them didn't get offer, and 57.0% of them get offer released.
+```{r PROP TABLE 2, echo = FALSE}
+prop.table(table(subset_unique_data$STU_ABOR_TSI_NM))
+prop.table(table(subset_unique_data$STU_ABOR_TSI_NM,subset_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 3, echo = FALSE}
+prop.table(table(subset_unique_data$SUBMISSION_METHOD))
+prop.table(table(subset_unique_data$SUBMISSION_METHOD,subset_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 4, echo = FALSE}
+prop.table(table(subset_unique_data$ENTRY_TYPE))
+prop.table(table(subset_unique_data$ENTRY_TYPE,subset_unique_data$OFFER_RELEASED_FG),1)
+```
+
+
+```{r PROP TABLE 5, echo = FALSE}
+prop.table(table(subset_unique_data$LAST_COUNTRY_EDUCATION))
+prop.table(table(subset_unique_data$LAST_COUNTRY_EDUCATION,subset_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 6, echo = FALSE}
+prop.table(table(subset_unique_data$PREFERENCE_NO))
+prop.table(table(subset_unique_data$PREFERENCE_NO,subset_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 7, echo = FALSE}
+prop.table(table(subset_unique_data$STUDY_MODE_CD))
+prop.table(table(subset_unique_data$AVAIL_ORG_UNIT_NM,subset_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 8, echo = FALSE}
+prop.table(table(subset_unique_data$ORIG_AVAIL_YR))
+prop.table(table(subset_unique_data$ORIG_AVAIL_YR,subset_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 9, echo = FALSE}
+prop.table(table(subset_unique_data$ORIG_STUDY_PERIOD))
+prop.table(table(subset_unique_data$ORIG_STUDY_PERIOD,subset_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r PROP TABLE 10, echo = FALSE}
+prop.table(table(subset_unique_data$SPK_CAT_TYPE_CD))
+prop.table(table(subset_unique_data$SPK_CAT_TYPE_CD,subset_unique_data$OFFER_RELEASED_FG),1)
+```
+
+```{r plot1,2,3,4,fig.align='center', fig.width= 16, fig.height = 12,echo=FALSE}
+p1=ggplot(data=subset_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=STU_CITIZEN_NM),position="dodge")+ggtitle("visa status vs. offer released")
+p2=ggplot(data=subset_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=STU_ABOR_TSI_NM),position="dodge")+ggtitle("aboriginal and torres strait islander status vs. offer released")
+p3=ggplot(data=subset_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=SUBMISSION_METHOD),position="dodge")+ggtitle("submission method vs. offer released")
+p4=ggplot(data=subset_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=ENTRY_TYPE),position="dodge")+ggtitle("entry type vs. offer released")
+grid.arrange(p1,p2,p3,p4,ncol=2)
+```
+
+```{r plot5,fig.align='center', fig.width= 24, fig.height = 6,echo=FALSE}
+p5=ggplot(data=subset_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=LAST_COUNTRY_EDUCATION),position="dodge")+ggtitle("last country of education vs. offer released")
+p5
+```
+
+```{r plot6,7,8,9,10,fig.align='center', fig.width= 16, fig.height = 20,echo=FALSE}
+p6=ggplot(data=subset_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=PREFERENCE_NO),position="dodge")+ggtitle("Prefernece number vs. offer released")
+p7=ggplot(data=subset_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=STUDY_MODE_CD),position="dodge")+ggtitle("Study mode vs. offer released")
+p8=ggplot(data=subset_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=ORIG_AVAIL_YR),position="dodge")+ggtitle("Original available year vs. offer released")
+p9=ggplot(data=subset_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=ORIG_STUDY_PERIOD),position="dodge")+ggtitle("Original available period vs. offer released")
+p10=ggplot(data=subset_unique_data, aes(OFFER_RELEASED_FG,..count..))+geom_bar(aes(fill=SPK_CAT_TYPE_CD),position="dodge")+ggtitle("level of study vs. offer released")
+grid.arrange(p6,p7,p8,p9,p10,ncol=2)
+```
+
+
+
+
+
+
+
+
+
