@@ -7,6 +7,7 @@
 * **Group Members:** Wanqi Geng, Amar Babuta, Yannan Gao, Zhaoying Cheng
 * **Deadline Submission:** Monday  9 November, 2020 @ 9:00am 
 
+**Please only look at the following 4 directories which provide the final version information of this project.**
 ##FinalVersionCode
 This directory contains all the codes we applied for the project. Please read in the following order:
 * 1_orginalPG using to separate the data into three subsets.
