@@ -1,2 +1,2 @@
-# Admission timestamps. G22
+# Data Science Capstone Project G22 -Admission Timestamps
 Capstone Project
